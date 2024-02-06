@@ -1,0 +1,198 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Simple Website with Tabs</title>
+<style>
+  body {
+    font-family: Arial, sans-serif;
+    background-color: #f8f9fa;
+  }
+
+  .container {
+    max-width: 800px;
+    margin: 20px auto;
+    background-color: #fff;
+    border-radius: 8px;
+    box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
+  }
+
+  .tab {
+    display: none;
+    padding: 20px;
+  }
+
+  .active-tab {
+    display: block;
+  }
+
+  button {
+    padding: 10px 20px;
+    background-color: #007bff;
+    color: #fff;
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+  }
+
+  button:hover {
+    background-color: #0056b3;
+  }
+
+  input[type="text"] {
+    width: 100%;
+    padding: 8px;
+    margin-bottom: 10px;
+    border: 1px solid #ccc;
+    border-radius: 4px;
+    box-sizing: border-box;
+  }
+
+  ul {
+    list-style-type: none;
+    padding: 0;
+  }
+
+  li {
+    margin-bottom: 10px;
+    padding: 10px;
+    border: 1px solid #ccc;
+    border-radius: 4px;
+  }
+
+  .response-window {
+    height: 200px;
+    overflow-y: auto;
+    border: 1px solid #ccc;
+    padding: 10px;
+    margin-bottom: 10px;
+  }
+</style>
+</head>
+<body>
+<div class="container">
+  <!-- Tab navigation buttons -->
+  <div class="tab-navigation">
+    <button onclick="openTab('tab1')">Tab 1</button>
+    <button onclick="openTab('tab2')">Tab 2</button>
+    <button onclick="openTab('tab3')">Tab 3</button>
+    <button onclick="openTab('tab4')">Tab 4</button>
+  </div>
+
+  <div id="tab1" class="tab active-tab">
+    <h2>First Tab</h2>
+    <input type="text" id="inputString" placeholder="Enter a string">
+    <button onclick="sendData()">Send to Server</button>
+    <div class="response-window" id="responseWindow"></div>
+  </div>
+
+  <div id="tab2" class="tab">
+    <h2>Second Tab</h2>
+    <ul id="expressionList">
+      <!-- Expressions will be added here dynamically -->
+    </ul>
+  </div>
+
+  <div id="tab3" class="tab">
+    <h2>Third Tab</h2>
+    <ul id="operationList">
+      <!-- Operations will be added here dynamically -->
+    </ul>
+    <button onclick="sendOperations()">Send Operations</button>
+  </div>
+
+  <div id="tab4" class="tab">
+    <h2>Fourth Tab</h2>
+    <ul id="serverList">
+      <!-- Servers will be added here dynamically -->
+    </ul>
+  </div>
+
+</div>
+
+<script>
+  function openTab(tabName) {
+    var tabs = document.getElementsByClassName("tab");
+    for (var i = 0; i < tabs.length; i++) {
+      tabs[i].classList.remove("active-tab");
+    }
+    document.getElementById(tabName).classList.add("active-tab");
+  }
+
+  function sendData() {
+    var inputString = document.getElementById("inputString").value;
+    var responseWindow = document.getElementById("responseWindow");
+    //responseWindow.innerHTML = "Response from server: " + inputString;
+
+    // Структура запроса
+    var userData = {
+      expression: inputString
+    };
+
+    // Создаем запрос
+    var xhr = new XMLHttpRequest();
+    xhr.open("POST", "http://localhost:8081/frontendSite/sendExpression", true);
+    xhr.setRequestHeader("Content-Type", "application/json");
+
+    xhr.onreadystatechange = function() {
+      if (xhr.readyState === 4 && xhr.status === 200) {
+        // парсим JSON ответа
+        var response = JSON.parse(xhr.responseText);
+        // Печатаем ответ в консоль
+        console.log(response);     
+        // Делаем всплывающее окно
+        //alert(response);
+        // Печатаем в окно
+        responseWindow.innerHTML = 'Response from server:<br>'
+        responseWindow.innerHTML += response["response"] + '<br>'
+        responseWindow.innerHTML += response["timeToSend"]
+      }
+    };
+
+    xhr.send(JSON.stringify(userData));
+  }
+
+  function fetchOperations() {
+    var xhr = new XMLHttpRequest();
+    xhr.open("POST", "http://localhost:8081/frontendSite/getListOfExpression", true);
+    xhr.setRequestHeader("Content-Type", "application/json");
+
+    xhr.onreadystatechange = function() {
+      if (xhr.readyState === 4 && xhr.status === 200) {
+        var operations = JSON.parse(xhr.responseText);
+        populateOperationList(operations);
+      }
+    };
+
+    xhr.send();
+  }
+
+  function populateOperationList(operations) {
+    const operationList = document.getElementById('operationList');
+    operationList.innerHTML = ''; // Clear existing list items
+
+    operations.forEach(operation => {
+      const listItem = document.createElement('li');
+      listItem.innerHTML = `
+        <strong>Status:</strong> ${operation["status"]}<br>
+        <strong>Expression:</strong> ${operation.expression}<br>
+        <strong>Creation Date:</strong> ${operation.creationDate}<br>
+        <strong>Completion Date:</strong> ${operation.completionDate}<br>
+      `;
+      operationList.appendChild(listItem);
+    });
+  }
+
+  document.getElementById('tab2').addEventListener('click', fetchOperations);
+
+  function sendOperations() {
+    // Example: Send operations data to server
+    alert("Operations data sent to server");
+  }
+
+  // Initially open the first tab
+  openTab("tab1");
+</script>
+</body>
+</html>
