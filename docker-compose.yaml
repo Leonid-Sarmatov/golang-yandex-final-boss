@@ -1,0 +1,14 @@
+version: "3.8"
+services:
+  postgres:
+    image: postgres:15.3
+    container_name: leonids_postgres
+    restart: always
+    environment:
+      POSTGRES_DB: "main_database"
+      POSTGRES_USER: "leonid"
+      POSTGRES_PASSWORD: "password"
+    volumes:
+      - ./init.sql:/docker-entrypoint-initdb.d/init.sql
+    ports:
+      - "5432:5432"
