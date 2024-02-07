@@ -15,7 +15,9 @@ func main() {
 		AppPort: "8081",
 		Executors: []pkg.Executor{
 			pkg.NewSiteUpExecutor(),
-			pkg.NewGetExpressionFromFirstPageExecutor(),
+			pkg.NewGetExpressionFromFirstPage(),
+			pkg.NewGetListOfTasksFromSecondPage(),
+			pkg.NewSendMessageWithTimeOfOperations(),
 		},
 	}
 

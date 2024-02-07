@@ -21,6 +21,7 @@ func (app *App) Run() {
 
 	for _, executor := range app.Executors {
 		mux.HandleFunc(executor.getExecutorRoute(), executor.getExecutorHandler())
+		log.Println("[OK]: executor was init")
 	}
 
 	// Запускаем сервер

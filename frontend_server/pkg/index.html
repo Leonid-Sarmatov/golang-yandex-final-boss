@@ -89,17 +89,45 @@
 
   <div id="tab2" class="tab">
     <h2>Second Tab</h2>
-    <ul id="expressionList">
+    <ul id="operationList">
       <!-- Expressions will be added here dynamically -->
     </ul>
   </div>
 
   <div id="tab3" class="tab">
-    <h2>Third Tab</h2>
-    <ul id="operationList">
-      <!-- Operations will be added here dynamically -->
+    <h2>Mathematical Operations</h2>
+    <ul id="operationFormList">
+      <!-- Operation forms will be added here dynamically -->
+      <li>
+        <h3>Addition</h3>
+        <form id="additionForm">
+          <label for="additionTime">Time (seconds):</label>
+          <input type="number" id="additionTime" name="additionTime" min="1" required>
+        </form>
+      </li>
+      <li>
+        <h3>Subtraction</h3>
+        <form id="subtractionForm">
+          <label for="subtractionTime">Time (seconds):</label>
+          <input type="number" id="subtractionTime" name="subtractionTime" min="1" required>
+        </form>
+      </li>
+      <li>
+        <h3>Division</h3>
+        <form id="divisionForm">
+          <label for="divisionTime">Time (seconds):</label>
+          <input type="number" id="divisionTime" name="divisionTime" min="1" required>
+        </form>
+      </li>
+      <li>
+        <h3>Multiplication</h3>
+        <form id="multiplicationForm">
+          <label for="multiplicationTime">Time (seconds):</label>
+          <input type="number" id="multiplicationTime" name="multiplicationTime" min="1" required>
+        </form>
+      </li>
     </ul>
-    <button onclick="sendOperations()">Send Operations</button>
+    <button onclick="sendOperationsTimes()">Send Data</button>
   </div>
 
   <div id="tab4" class="tab">
@@ -123,7 +151,6 @@
   function sendData() {
     var inputString = document.getElementById("inputString").value;
     var responseWindow = document.getElementById("responseWindow");
-    //responseWindow.innerHTML = "Response from server: " + inputString;
 
     // Структура запроса
     var userData = {
@@ -132,8 +159,9 @@
 
     // Создаем запрос
     var xhr = new XMLHttpRequest();
-    xhr.open("POST", "http://localhost:8081/frontendSite/sendExpression", true);
+    xhr.open("POST", "http://localhost:8081/sendExpression", true);
     xhr.setRequestHeader("Content-Type", "application/json");
+    xhr.send(JSON.stringify(userData));
 
     xhr.onreadystatechange = function() {
       if (xhr.readyState === 4 && xhr.status === 200) {
@@ -141,21 +169,17 @@
         var response = JSON.parse(xhr.responseText);
         // Печатаем ответ в консоль
         console.log(response);     
-        // Делаем всплывающее окно
-        //alert(response);
         // Печатаем в окно
         responseWindow.innerHTML = 'Response from server:<br>'
         responseWindow.innerHTML += response["response"] + '<br>'
         responseWindow.innerHTML += response["timeToSend"]
       }
     };
-
-    xhr.send(JSON.stringify(userData));
   }
 
   function fetchOperations() {
     var xhr = new XMLHttpRequest();
-    xhr.open("POST", "http://localhost:8081/frontendSite/getListOfExpression", true);
+    xhr.open("POST", "http://localhost:8081/getListOfExpression", true);
     xhr.setRequestHeader("Content-Type", "application/json");
 
     xhr.onreadystatechange = function() {
@@ -174,24 +198,73 @@
 
     operations.forEach(operation => {
       const listItem = document.createElement('li');
+      console.log(operation.expression);
+      var status = ""
+      if (operation.status === 1) {
+        status = "Accepted for processing";
+      }
+      if (operation.status === 2) {
+        status = "Successfully parsed and accepted for processing";
+      }
+      if (operation.status === 3) {
+        status = "In the process of calculation";
+      }
+      if (operation.status === 4) {
+        status = "Successfully calculated";
+      }
+      if (operation.status === 5) {
+        status = "Unexpected error";
+      }
       listItem.innerHTML = `
-        <strong>Status:</strong> ${operation["status"]}<br>
+        <strong>Status:</strong> ${status}<br>
         <strong>Expression:</strong> ${operation.expression}<br>
         <strong>Creation Date:</strong> ${operation.creationDate}<br>
         <strong>Completion Date:</strong> ${operation.completionDate}<br>
       `;
       operationList.appendChild(listItem);
-    });
+    });  
   }
 
-  document.getElementById('tab2').addEventListener('click', fetchOperations);
+  function sendOperationsTimes() {
+    var additionTime = document.getElementById("additionTime").value;
+    var subtractionTime = document.getElementById("subtractionTime").value;
+    var divisionTime = document.getElementById("divisionTime").value;
+    var multiplicationTime = document.getElementById("multiplicationTime").value;
 
-  function sendOperations() {
-    // Example: Send operations data to server
-    alert("Operations data sent to server");
+    // Структура запроса
+    var userData = {
+      additionTime: additionTime,
+	    subtractionTime: subtractionTime,
+	    divisionTime: divisionTime,
+	    multiplicationTime: multiplicationTime
+    };
+
+    // Создаем запрос
+    var xhr = new XMLHttpRequest();
+    xhr.open("PUT", "http://localhost:8081/sendTimeOfOperations", true);
+    xhr.setRequestHeader("Content-Type", "application/json");
+    xhr.send(JSON.stringify(userData));
+
+    xhr.onreadystatechange = function() {
+      if (xhr.readyState === 4 && xhr.status === 200) {
+        // Печатаем ответ в консоль
+        console.log(response);     
+      }
+    };
   }
 
-  // Initially open the first tab
+  var requestsInitiated = false;
+
+  function initiateRequests() {
+    if (!requestsInitiated) {
+      fetchOperations();
+      setInterval(fetchOperations, 1000); // Start periodic fetching
+      requestsInitiated = true;
+    }
+  }
+
+  document.addEventListener('DOMContentLoaded', initiateRequests);
+
   openTab("tab1");
 </script>
 </body>

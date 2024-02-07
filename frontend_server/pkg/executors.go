@@ -9,7 +9,7 @@ import (
 	"time"
 )
 
-// **********************************
+// ***************** SiteUpExecutor *****************
 type SiteUpExecutor struct{}
 
 func NewSiteUpExecutor() *SiteUpExecutor {
@@ -50,17 +50,17 @@ func (e *SiteUpExecutor) getExecutorHandler() func(w http.ResponseWriter, r *htt
 		fmt.Fprint(w, string(buffer))
 	}
 }
-// **********************************
+// **************************************************
 
 
 
-// **********************************
+// *********** GetExpressionFromFirstPage ***********
 type ExpressionJSON struct {
 	Expression string `json:"expression"`
 }
 
 type FirstPageResponseJSON struct {
-	Response string `json:"response"`
+	Response   string    `json:"response"`
 	TimeToSend time.Time `json:"timeToSend"`
 }
 
@@ -71,7 +71,7 @@ func NewGetExpressionFromFirstPage() *GetExpressionFromFirstPage {
 }
 
 func (e *GetExpressionFromFirstPage) getExecutorRoute() string {
-	return "/frontendSite/sendExpression"
+	return "/sendExpression"
 }
 
 func (e *GetExpressionFromFirstPage) getExecutorHandler() func(w http.ResponseWriter, r *http.Request) {
@@ -90,7 +90,7 @@ func (e *GetExpressionFromFirstPage) getExecutorHandler() func(w http.ResponseWr
 
 		// Создаем отклик
 		response := FirstPageResponseJSON{
-			Response: message.Expression,
+			Response:   message.Expression,
 			TimeToSend: time.Now(),
 		}
 
@@ -108,60 +108,54 @@ func (e *GetExpressionFromFirstPage) getExecutorHandler() func(w http.ResponseWr
 		w.Write(jsonResponse)
 	}
 }
-// **********************************
+// **************************************************
 
 
 
-// **********************************
-type ListTasksJSON struct {
-	ListTasks []Task `json:"listTasks"`
-}
-
-type Task struct {
-	ID         int
-	Expression string
-	HashID     string
-	Status     int
-	Result     string
-	BeginTime  time.Time
-	EndTime    time.Time
+// ********** GetListOfTasksFromSecondPage **********
+type TaskJSON struct {
+	ID         int       `json:"id"`
+	Expression string    `json:"expression"`
+	HashID     string    `json:"hashId"`
+	Status     int       `json:"status"`
+	Result     string    `json:"result"`
+	BeginTime  time.Time `json:"beginTime"`
+	EndTime    time.Time `json:"endTime"`
 }
 
 type GetListOfTasksFromSecondPage struct{}
 
-func NewGetExpressionFromFirstPageExecutor() *GetListOfTasksFromSecondPage {
+func NewGetListOfTasksFromSecondPage() *GetListOfTasksFromSecondPage {
 	return &GetListOfTasksFromSecondPage{}
 }
 
 func (e *GetListOfTasksFromSecondPage) getExecutorRoute() string {
-	return "/frontendSite/getListOfExpression"
+	return "/getListOfExpression"
 }
 
 func (e *GetListOfTasksFromSecondPage) getExecutorHandler() func(w http.ResponseWriter, r *http.Request) {
 	return func(w http.ResponseWriter, r *http.Request) {
-		log.Println("[GET]: Was resived expression")
+		log.Println("[GET]: Was resived list")
 
 		// Создаем отклик
-		response := ListTasksJSON{
-			ListTasks: []Task{
-				{
-					ID: 0,
-					Expression: "2+2",
-					HashID: "g7Yg56Ty",
-					Status: 1,
-					Result: "",
-					BeginTime: time.Now(),
-					EndTime: time.Now(),
-				},
-				{
-					ID: 1,
-					Expression: "9*4+2",
-					HashID: "7kT63o",
-					Status: 1,
-					Result: "",
-					BeginTime: time.Now(),
-					EndTime: time.Now(),
-				},
+		response := []TaskJSON{
+			{
+				ID:         0,
+				Expression: "2+2",
+				HashID:     "g7Yg56Ty",
+				Status:     1,
+				Result:     "",
+				BeginTime:  time.Now(),
+				EndTime:    time.Now(),
+			},
+			{
+				ID:         1,
+				Expression: "9*4+2",
+				HashID:     "7kT63o",
+				Status:     1,
+				Result:     "",
+				BeginTime:  time.Now(),
+				EndTime:    time.Now(),
 			},
 		}
 
@@ -179,4 +173,53 @@ func (e *GetListOfTasksFromSecondPage) getExecutorHandler() func(w http.Response
 		w.Write(jsonResponse)
 	}
 }
-// **********************************
+// **************************************************
+
+
+
+// ********* SendMessageWithTimeOfOperations ********
+type CalculateTimesJSON struct {
+	AdditionTime       string `json:"additionTime"`
+	SubtractionTime    string `json:"subtractionTime"`
+	DivisionTime       string `json:"divisionTime"`
+	MultiplicationTime string `json:"multiplicationTime"`
+}
+
+type CalculateTimesToSendJSON struct {
+	AdditionTime       time.Time `json:"additionTime"`
+	SubtractionTime    time.Time `json:"subtractionTime"`
+	DivisionTime       time.Time `json:"divisionTime"`
+	MultiplicationTime time.Time `json:"multiplicationTime"`
+}
+
+type SendMessageWithTimeOfOperations struct{}
+
+func NewSendMessageWithTimeOfOperations() *SendMessageWithTimeOfOperations {
+	return &SendMessageWithTimeOfOperations{}
+}
+
+func (e *SendMessageWithTimeOfOperations) getExecutorRoute() string {
+	return "/sendTimeOfOperations"
+}
+
+func (e *SendMessageWithTimeOfOperations) getExecutorHandler() func(w http.ResponseWriter, r *http.Request) {
+	return func(w http.ResponseWriter, r *http.Request) {
+		// Пишем лог
+		log.Println("[PUT]: Was resived times")
+
+		// Сообщение от фронта, содержащее задержки для каждой операции
+		var message CalculateTimesJSON
+
+		// Декодируем тело запроса в сообщение
+		decoder := json.NewDecoder(r.Body)
+		err := decoder.Decode(&message)
+		if err != nil {
+			http.Error(w, "[ERROR]: Decoding JSON was failed: "+err.Error(), http.StatusBadRequest)
+			log.Println("[ERROR]: Decoding JSON was failed: " + err.Error())
+			return
+		}
+
+		log.Printf("[OK]: Recive messsage was successfull: %v", message)
+	}
+}
+// **************************************************
