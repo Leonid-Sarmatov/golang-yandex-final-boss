@@ -1,50 +1,147 @@
 package pkg
 
+import (
+	"net/http"
+	//"github.com/Knetic/govaluate"
+)
+
 /*
-AddArithmeticExpression описывпет исполнтеля
-добавляения арифметического выражения на выполнение
+AddArithmeticExpression принимает запрос с арифметическим 
+выражением, и возвращает ошибку если не удается распарсить
 */
 type AddArithmeticExpression struct{}
 
+func NewAddArithmeticExpression() *AddArithmeticExpression {
+	return &AddArithmeticExpression{}
+}
+
+func (e *AddArithmeticExpression) getExecutorRoute() string {
+	return "/addArithmeticExpression"
+}
+
+func (e *AddArithmeticExpression) getExecutorHandler() func(http.ResponseWriter, *http.Request) {
+	return func(w http.ResponseWriter, r *http.Request) {
+
+	}
+}
+
 /*
-GetListExpressionsWithStatuses описывает исполнителя
-позволяющего получить в ответ на запрос список выражений со статусами
+GetListExpressionsWithStatuses принимает запрос
+и возвращает список со всеми задачами 
 */
 type GetListExpressionsWithStatuses struct{}
 
-/*
-	описывает исполнителя
+func NewGetListExpressionsWithStatuses() *GetListExpressionsWithStatuses {
+	return &GetListExpressionsWithStatuses{}
+}
 
-позволяющего получить в ответ на запрос значение выражения
-по его идентификатору
+func (e *GetListExpressionsWithStatuses) getExecutorRoute() string {
+	return "/getListOfTasks"
+}
+
+func (e *GetListExpressionsWithStatuses) getExecutorHandler() func(http.ResponseWriter, *http.Request) {
+	return func(w http.ResponseWriter, r *http.Request) {
+
+	}
+}
+
+/*
+GetValueOfExpressionByIdentifier принимает запрос с 
+арифметическим выражением и возвращает результат вычислений 
 */
-type GetValueOfExpressionByIdentifier struct{}
+type GetValueOfExpression struct{}
+
+func NewGetValueOfExpression() *GetValueOfExpression {
+	return &GetValueOfExpression{}
+}
+
+func (e *GetValueOfExpression) getExecutorRoute() string {
+	return "/getResultOfExpression"
+}
+
+func (e *GetValueOfExpression) getExecutorHandler() func(http.ResponseWriter, *http.Request) {
+	return func(w http.ResponseWriter, r *http.Request) {
+
+	}
+}
 
 /*
-	описывает исполнителя
-
-позволяющего получить в ответ на запрос список операций и
-времени их выполнения
+GetListOfAvailableOperations принимает запрос и
+возвращает список времени выполнения для каждой операции
 */
 type GetListOfAvailableOperations struct{}
 
-/*
-	описывает исполнителя
+func NewGetListOfAvailableOperations() *GetListOfAvailableOperations {
+	return &GetListOfAvailableOperations{}
+}
 
-принимающего запрос со временем выполнения для каждой операции
+func (e *GetListOfAvailableOperations) getExecutorRoute() string {
+	return "/uuu"
+}
+
+func (e *GetListOfAvailableOperations) getExecutorHandler() func(http.ResponseWriter, *http.Request) {
+	return func(w http.ResponseWriter, r *http.Request) {
+
+	}
+}
+
+/*
+SetExecutionTimeOfOperations принимает запрос со списком
+времени выполнения для каждой операции
 */
 type SetExecutionTimeOfOperations struct{}
 
-/*
-	описывает исполнителя
+func NewSetExecutionTimeOfOperations() *SetExecutionTimeOfOperations {
+	return &SetExecutionTimeOfOperations{}
+}
 
-возвращающего в ответ на запрос готовую к решению задачу
+func (e *SetExecutionTimeOfOperations) getExecutorRoute() string {
+	return "/setExecutionTimeOfOperations"
+}
+
+func (e *SetExecutionTimeOfOperations) getExecutorHandler() func(http.ResponseWriter, *http.Request) {
+	return func(w http.ResponseWriter, r *http.Request) {
+
+	}
+}
+
+/*
+GetReadyTaskToSolving принимает запрос с информацией
+о вычислителе и возвращает задачу готовую к выполнению
+вместе с информацией о времени выполнения арифметических операций
 */
 type GetReadyTaskToSolving struct{}
 
-/*
-	описывает исполнителя
+func NewGetReadyTaskToSolving() *GetReadyTaskToSolving {
+	return &GetReadyTaskToSolving{}
+}
 
-принимающего запрос с результатом вычислений
+func (e *GetReadyTaskToSolving) getExecutorRoute() string {
+	return "/getTaskToSolving"
+}
+
+func (e *GetReadyTaskToSolving) getExecutorHandler() func(http.ResponseWriter, *http.Request) {
+	return func(w http.ResponseWriter, r *http.Request) {
+
+	}
+}
+
+/*
+SetResultOfSolving принимает запрос с результатом, информацией 
+о вычислителе и ошибках, возникших при выполнении
 */
-type GetResultOfSolving struct{}
+type SetResultOfSolving struct{}
+
+func NewGetResultOfSolving() *SetResultOfSolving {
+	return &SetResultOfSolving{}
+}
+
+func (e *SetResultOfSolving) getExecutorRoute() string {
+	return "/setResultOfExpression"
+}
+
+func (e *SetResultOfSolving) getExecutorHandler() func(http.ResponseWriter, *http.Request) {
+	return func(w http.ResponseWriter, r *http.Request) {
+
+	}
+}

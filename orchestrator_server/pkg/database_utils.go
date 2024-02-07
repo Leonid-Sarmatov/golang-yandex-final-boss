@@ -128,6 +128,9 @@ func (db *DatabaseConnection) AddTask(task Task) error {
 	return nil
 }
 
+/*
+GetAllTasks возвращает все задачи из базы данных
+*/
 func (db *DatabaseConnection) GetAllTasks() ([]Task, error) {
 	rows, err := db.DB.Query("SELECT * FROM task_table")
 	if err != nil {
@@ -148,6 +151,9 @@ func (db *DatabaseConnection) GetAllTasks() ([]Task, error) {
 	return tasks, nil
 }
 
+/*
+GetTasksFromStatus возвращает список с задач с определенным статусом
+*/
 func (db *DatabaseConnection) GetTasksFromStatus(status int) ([]Task, error) {
 	rows, err := db.DB.Query("SELECT * FROM task_table WHERE status=$1", status)
 	if err != nil {
@@ -168,12 +174,17 @@ func (db *DatabaseConnection) GetTasksFromStatus(status int) ([]Task, error) {
 	return tasks, nil
 }
 
+/*
+DeleteTasksFromStatus удаляет задачи с определеееными статусами
+*/
 func (db *DatabaseConnection) DeleteTasksFromStatus(status int) error {
 	_, err := db.DB.Exec("DELETE FROM task_table WERE status=$1", status)
     return err
 }
 
-
+/*
+GetTasksFromExpession возвращает задачи с определенным математическим выражением 
+*/
 func (db *DatabaseConnection) GetTasksFromExpession(expression string) ([]Task, error) {
 	rows, err := db.DB.Query("SELECT * FROM task_table WHERE expression=$1", expression)
 	if err != nil {
@@ -194,6 +205,9 @@ func (db *DatabaseConnection) GetTasksFromExpession(expression string) ([]Task, 
 	return tasks, nil
 }
 
+/*
+DeleteTasksFromExpession удаляет задачу с определенным условием
+*/
 func (db *DatabaseConnection) DeleteTasksFromExpession(expression string) error {
 	_, err := db.DB.Exec("DELETE FROM task_table WERE expression=$1", expression)
     return err

@@ -18,6 +18,7 @@ func main() {
 			pkg.NewGetExpressionFromFirstPage(),
 			pkg.NewGetListOfTasksFromSecondPage(),
 			pkg.NewSendMessageWithTimeOfOperations(),
+			pkg.NewGetListOfSolversFromFourthPage(),
 		},
 	}
 

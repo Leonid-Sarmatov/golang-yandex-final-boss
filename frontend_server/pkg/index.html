@@ -83,7 +83,7 @@
   <div id="tab1" class="tab active-tab">
     <h2>First Tab</h2>
     <input type="text" id="inputString" placeholder="Enter a string">
-    <button onclick="sendData()">Send to Server</button>
+    <button onclick="sendExpression()">Send to Server</button>
     <div class="response-window" id="responseWindow"></div>
   </div>
 
@@ -132,7 +132,7 @@
 
   <div id="tab4" class="tab">
     <h2>Fourth Tab</h2>
-    <ul id="serverList">
+    <ul id="solversList">
       <!-- Servers will be added here dynamically -->
     </ul>
   </div>
@@ -140,6 +140,7 @@
 </div>
 
 <script>
+  // Запуск сайта 
   function openTab(tabName) {
     var tabs = document.getElementsByClassName("tab");
     for (var i = 0; i < tabs.length; i++) {
@@ -148,7 +149,8 @@
     document.getElementById(tabName).classList.add("active-tab");
   }
 
-  function sendData() {
+  // Передача на бэкенд выражения для выполнения
+  function sendExpression() {
     var inputString = document.getElementById("inputString").value;
     var responseWindow = document.getElementById("responseWindow");
 
@@ -173,13 +175,21 @@
         responseWindow.innerHTML = 'Response from server:<br>'
         responseWindow.innerHTML += response["response"] + '<br>'
         responseWindow.innerHTML += response["timeToSend"]
+      } else {
+        displayError("Status: " + xhr.status + " " + xhr.statusText);
       }
     };
   }
 
-  function fetchOperations() {
+  function displayError(message) {
+    const responseWindow = document.getElementById('responseWindow');
+    responseWindow.innerHTML = message;
+  }
+
+  // Получение от сервера таблицы с задачами
+  function getListOfTask() {
     var xhr = new XMLHttpRequest();
-    xhr.open("POST", "http://localhost:8081/getListOfExpression", true);
+    xhr.open("POST", "http://localhost:8081/getListOfTask", true);
     xhr.setRequestHeader("Content-Type", "application/json");
 
     xhr.onreadystatechange = function() {
@@ -192,10 +202,10 @@
     xhr.send();
   }
 
+  // Заполнение таблицы с задачами
   function populateOperationList(operations) {
     const operationList = document.getElementById('operationList');
     operationList.innerHTML = ''; // Clear existing list items
-
     operations.forEach(operation => {
       const listItem = document.createElement('li');
       console.log(operation.expression);
@@ -225,18 +235,14 @@
     });  
   }
 
+  // Передача на бэкенд времени выполнения операций
   function sendOperationsTimes() {
-    var additionTime = document.getElementById("additionTime").value;
-    var subtractionTime = document.getElementById("subtractionTime").value;
-    var divisionTime = document.getElementById("divisionTime").value;
-    var multiplicationTime = document.getElementById("multiplicationTime").value;
-
     // Структура запроса
     var userData = {
-      additionTime: additionTime,
-	    subtractionTime: subtractionTime,
-	    divisionTime: divisionTime,
-	    multiplicationTime: multiplicationTime
+      additionTime: document.getElementById("additionTime").value,
+	    subtractionTime: document.getElementById("subtractionTime").value,
+	    divisionTime: document.getElementById("divisionTime").value,
+	    multiplicationTime: document.getElementById("multiplicationTime").value
     };
 
     // Создаем запрос
@@ -253,16 +259,50 @@
     };
   }
 
-  var requestsInitiated = false;
+  // Получение от сервера таблицы с вычислительными сервисами
+  function getListOfSolvers() {
+    var xhr = new XMLHttpRequest();
+    xhr.open("POST", "http://localhost:8081/getListOfSolvers", true);
+    xhr.setRequestHeader("Content-Type", "application/json");
 
+    xhr.onreadystatechange = function() {
+      if (xhr.readyState === 4 && xhr.status === 200) {
+        var solvers = JSON.parse(xhr.responseText);
+        populateSolversList(solvers);
+      }
+    };
+
+    xhr.send();
+  }
+
+  // Заполнение таблицы вычислителей
+  function populateSolversList(solvers) {
+    const solversList = document.getElementById('solversList');
+    solversList.innerHTML = ''; // Clear existing list items
+    solvers.forEach(solver => {
+      const listItem = document.createElement('li');
+      console.log(solver);
+      listItem.innerHTML = `
+        <strong>Solver Name:</strong> ${status.solverName}<br>
+        <strong>Solving Now Expression:</strong> ${solver.solvingExpression}<br>
+        <strong>Last Ping:</strong> ${solver.lastPing}<br>
+        <strong>Infomatiom From The Solver:</strong> ${solver.infoString}<br>
+      `;
+      solversList.appendChild(listItem);
+    });  
+  }
+
+  // Запуск потока запросов для обновления таблицы с задачами
+  var requestsInitiated = false;
   function initiateRequests() {
     if (!requestsInitiated) {
-      fetchOperations();
-      setInterval(fetchOperations, 1000); // Start periodic fetching
+      getListOfTask();
+      setInterval(getListOfTask, 1000); 
+      getListOfSolvers();
+      setInterval(getListOfSolvers, 1000); 
       requestsInitiated = true;
     }
   }
-
   document.addEventListener('DOMContentLoaded', initiateRequests);
 
   openTab("tab1");
