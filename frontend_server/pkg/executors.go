@@ -1,17 +1,23 @@
 package pkg
 
 import (
+	"bytes"
 	"encoding/json"
 	"fmt"
+	"io"
 	"log"
 	"net/http"
 	"os"
+	"regexp"
+	"strconv"
+	"strings"
 	"time"
-	"github.com/Knetic/govaluate"
-	"bytes"
+	//"github.com/Knetic/govaluate"
 )
 
-// ***************** SiteUpExecutor *****************
+/*
+SiteUpExecutor поднимает веб страницу
+*/
 type SiteUpExecutor struct{}
 
 func NewSiteUpExecutor() *SiteUpExecutor {
@@ -53,15 +59,16 @@ func (e *SiteUpExecutor) getExecutorHandler() func(w http.ResponseWriter, r *htt
 	}
 }
 
-// **************************************************
-
-// *********** GetExpressionFromFirstPage ***********
+/*
+SendExpressionFromFirstPage принимает запрос с выражением
+и отправляет запрос(с выражением) на сервер-оркестратор
+*/
 type ExpressionJSON struct {
 	Expression string `json:"expression"`
 }
 
 type ExpressionRequestJSON struct {
-	Expression string `json:"expression"`
+	Expression string    `json:"expression"`
 	TimeToSend time.Time `json:"timeToSend"`
 }
 
@@ -87,16 +94,16 @@ func (e *SendExpressionFromFirstPage) getExecutorHandler() func(w http.ResponseW
 			return
 		}
 
-		// Пробуем распарсить строку
-		_, err = govaluate.NewEvaluableExpression(message.Expression)
-		if err != nil {
-			http.Error(w, "[ERROR]: Can not parse expression: "+err.Error(), http.StatusBadRequest)
-			log.Println("[ERROR]: Can not parse expression: " + err.Error())
-			return 
+		// Проверяем валидность выражения
+		isValid := isValidExpression(message.Expression)
+		if !isValid {
+			http.Error(w, "[ERROR]: Can not parse expression", http.StatusBadRequest)
+			log.Println("[ERROR]: Can not parse expression")
+			return
 		}
 
 		// Если удалось успешно то пробуем отправить запрос на бэкенд
-		requestToBack := ExpressionRequestJSON {
+		requestToBack := ExpressionRequestJSON{
 			Expression: message.Expression,
 			TimeToSend: time.Now(),
 		}
@@ -110,21 +117,50 @@ func (e *SendExpressionFromFirstPage) getExecutorHandler() func(w http.ResponseW
 		}
 
 		// Пробует отправить запрос на бэк
-		resp, err := http.Post("http://localhost:8082/api/endpoint", "application/json", bytes.NewBuffer(jsonRequest))
+		resp, err := http.Post("http://orchestrator_server:8082/addArithmeticExpression", "application/json", bytes.NewBuffer(jsonRequest))
 		if err != nil {
-			http.Error(w, "[ERROR]: Can not encoding to JSON: "+err.Error(), http.StatusInternalServerError)
-			log.Println("[ERROR]: Can not encoding to JSON: " + err.Error())
+			http.Error(w, "[ERROR]: Can not send JSON: "+err.Error(), http.StatusInternalServerError)
+			log.Println("[ERROR]: Can not send JSON: " + err.Error())
 			return
 		}
 		defer resp.Body.Close()
 
+		w.WriteHeader(http.StatusOK)
 		log.Println("[OK]: Resive expression was successful")
 	}
 }
 
-// **************************************************
+func isValidExpression(expr string) bool {
+	pattern1 := regexp.MustCompile(`[\d\+\-\*/]`)
+	pattern2 := regexp.MustCompile(`[\+\-\*/]`)
+	arr := strings.Split(expr, "")
+	for i, ch := range arr {
+		if !pattern1.MatchString(ch) {
+			return false
+		}
 
-// ********** GetListOfTasksFromSecondPage **********
+		if (i != len(expr)-1) &&
+			pattern2.MatchString(arr[i]) &&
+			pattern2.MatchString(arr[i+1]) {
+			return false
+		}
+
+		if i == 0 && (ch == "*" || ch == "/") {
+			return false
+		}
+
+		if (i == len(expr)-1) && pattern2.MatchString(ch) {
+			return false
+		}
+	}
+
+	return true
+}
+
+/*
+GetListOfTasksFromSecondPage принимает запрос
+и возвращает список со всеми задачами
+*/
 type TaskJSON struct {
 	ID         int       `json:"id"`
 	Expression string    `json:"expression"`
@@ -147,48 +183,37 @@ func (e *GetListOfTasksFromSecondPage) getExecutorRoute() string {
 
 func (e *GetListOfTasksFromSecondPage) getExecutorHandler() func(w http.ResponseWriter, r *http.Request) {
 	return func(w http.ResponseWriter, r *http.Request) {
-		// Создаем отклик
-		response := []TaskJSON{
-			{
-				ID:         0,
-				Expression: "2+2",
-				HashID:     "g7Yg56Ty",
-				Status:     1,
-				Result:     "",
-				BeginTime:  time.Now(),
-				EndTime:    time.Now(),
-			},
-			{
-				ID:         1,
-				Expression: "9*4+2",
-				HashID:     "7kT63o",
-				Status:     1,
-				Result:     "",
-				BeginTime:  time.Now(),
-				EndTime:    time.Now(),
-			},
-		}
-
-		// Конвертируем отклик в json-отклик
-		jsonResponse, err := json.Marshal(response)
+		// Пробует отправить запрос на бэк для получения списка задач
+		resp, err := http.Get("http://orchestrator_server:8082/getListOfTasks")
 		if err != nil {
-			http.Error(w, "[ERROR]: Can not encoding to JSON"+err.Error(), http.StatusInternalServerError)
-			log.Println("[ERROR]: Can not encoding to JSON" + err.Error())
+			http.Error(w, "[ERROR]: Can not encoding to JSON: "+err.Error(), http.StatusInternalServerError)
+			log.Println("[ERROR]: Can not encoding to JSON: " + err.Error())
+			return
+		}
+		defer resp.Body.Close()
+
+		// Вытаскиваем тело из ответа, в котором зашифрован JSON
+		body, err := io.ReadAll(resp.Body)
+		if err != nil {
+			http.Error(w, "Error reading response from Server 2", http.StatusInternalServerError)
 			return
 		}
 
 		// Заполняем тело запроса и заголовки
 		w.WriteHeader(http.StatusOK)
 		w.Header().Set("Content-Type", "application/json")
-		w.Write(jsonResponse)
+		w.Write(body)
 
 		log.Println("[OK]: Send list of tasks was successful")
 	}
 }
 
-// **************************************************
-
-// ********* SendMessageWithTimeOfOperations ********
+/*
+SendMessageWithTimeOfOperations принимает запрос от
+веб страницы со временем выполнения для операций,
+и отправляет запрос(со временем выполнения для
+операций) на сервер-оркестратор
+*/
 type CalculateTimesJSON struct {
 	AdditionTime       string `json:"additionTime"`
 	SubtractionTime    string `json:"subtractionTime"`
@@ -196,11 +221,8 @@ type CalculateTimesJSON struct {
 	MultiplicationTime string `json:"multiplicationTime"`
 }
 
-type CalculateTimesToSendJSON struct {
-	AdditionTime       time.Time `json:"additionTime"`
-	SubtractionTime    time.Time `json:"subtractionTime"`
-	DivisionTime       time.Time `json:"divisionTime"`
-	MultiplicationTime time.Time `json:"multiplicationTime"`
+type TimeOfOperationJSON struct {
+	Times map[string]int `json:"times"`
 }
 
 type SendMessageWithTimeOfOperations struct{}
@@ -227,13 +249,72 @@ func (e *SendMessageWithTimeOfOperations) getExecutorHandler() func(w http.Respo
 			return
 		}
 
+		// Переводим строки в числовые значения времени в секундах
+		add, err := strconv.Atoi(message.AdditionTime)
+		if err != nil {
+			http.Error(w, "[ERROR]: Convert string to int was failed: "+err.Error(), http.StatusBadRequest)
+			log.Println("[ERROR]: Convert string to int was failed: " + err.Error())
+			return
+		}
+
+		sub, err := strconv.Atoi(message.SubtractionTime)
+		if err != nil {
+			http.Error(w, "[ERROR]: Convert string to int was failed: "+err.Error(), http.StatusBadRequest)
+			log.Println("[ERROR]: Convert string to int was failed: " + err.Error())
+			return
+		}
+
+		div, err := strconv.Atoi(message.DivisionTime)
+		if err != nil {
+			http.Error(w, "[ERROR]: Convert string to int was failed: "+err.Error(), http.StatusBadRequest)
+			log.Println("[ERROR]: Convert string to int was failed: " + err.Error())
+			return
+		}
+
+		mul, err := strconv.Atoi(message.MultiplicationTime)
+		if err != nil {
+			http.Error(w, "[ERROR]: Convert string to int was failed: "+err.Error(), http.StatusBadRequest)
+			log.Println("[ERROR]: Convert string to int was failed: " + err.Error())
+			return
+		}
+
+		request := TimeOfOperationJSON{
+			map[string]int{
+				"+": add,
+				"-": sub,
+				"/": div,
+				"*": mul,
+			},
+		}
+
+		// Формируем JSON
+		jsonRequest, err := json.Marshal(request)
+		if err != nil {
+			http.Error(w, "[ERROR]: Can not encoding to JSON: "+err.Error(), http.StatusInternalServerError)
+			log.Println("[ERROR]: Can not encoding to JSON: " + err.Error())
+			return
+		}
+
+		// Пробует отправить запрос на бэк
+		resp, err := http.Post("http://orchestrator_server:8082/setExecutionTimeOfOperations", "application/json", bytes.NewBuffer(jsonRequest))
+		if err != nil {
+			http.Error(w, "[ERROR]: Can not send JSON: "+err.Error(), http.StatusInternalServerError)
+			log.Println("[ERROR]: Can not send JSON: " + err.Error())
+			return
+		}
+		defer resp.Body.Close()
+
+		w.WriteHeader(http.StatusOK)
+		log.Println("[OK]: Resive expression was successful")
+
 		log.Printf("[OK]: Recive messsage with times was successfull: %v", message)
 	}
 }
 
-// **************************************************
-
-// ********* GetListOfSolversFromFourthPage ********
+/*
+GetListOfSolversFromFourthPage принимает запрос
+и возвращает список с информацией о вычислителях
+*/
 type SolverJSON struct {
 	SolverName           string `json:"solverName"`
 	SolvingNowExpression string `json:"solvingExpression"`
@@ -253,43 +334,27 @@ func (e *GetListOfSolversFromFourthPage) getExecutorRoute() string {
 
 func (e *GetListOfSolversFromFourthPage) getExecutorHandler() func(w http.ResponseWriter, r *http.Request) {
 	return func(w http.ResponseWriter, r *http.Request) {
-		// Создаем отклик
-		response := []SolverJSON{
-			{
-				SolverName:           "Main Solver",
-				SolvingNowExpression: "2+2",
-				LastPing:             time.Now().Format("2006-01-02 15:04:05"),
-				InfoString:           "Working 5 gorutines",
-			},
-			{
-				SolverName:           "Reserv Solver",
-				SolvingNowExpression: "9*4+2",
-				LastPing:             time.Now().Format("2006-01-02 15:04:05"),
-				InfoString:           "Was stoped",
-			},
-			{
-				SolverName:           "Power Solver",
-				SolvingNowExpression: "1-3/7+12*9",
-				LastPing:             time.Now().Format("2006-01-02 15:04:05"),
-				InfoString:           "Ready to launch",
-			},
-		}
-
-		// Конвертируем отклик в json-отклик
-		jsonResponse, err := json.Marshal(response)
+		// Пробует отправить запрос на бэк для получения списка вычислителей
+		resp, err := http.Get("http://orchestrator_server:8082/getListOfSolvers")
 		if err != nil {
-			http.Error(w, "[ERROR]: Can not encoding to JSON"+err.Error(), http.StatusInternalServerError)
-			log.Println("[ERROR]: Can not encoding to JSON" + err.Error())
+			http.Error(w, "[ERROR]: Can not encoding to JSON: "+err.Error(), http.StatusInternalServerError)
+			log.Println("[ERROR]: Can not encoding to JSON: " + err.Error())
+			return
+		}
+		defer resp.Body.Close()
+
+		// Вытаскиваем тело из ответа, в котором зашифрован JSON
+		body, err := io.ReadAll(resp.Body)
+		if err != nil {
+			http.Error(w, "Error reading response from server", http.StatusInternalServerError)
 			return
 		}
 
 		// Заполняем тело запроса и заголовки
 		w.WriteHeader(http.StatusOK)
 		w.Header().Set("Content-Type", "application/json")
-		w.Write(jsonResponse)
+		w.Write(body)
 
-		log.Println("[OK]: Send solvers list was successful")
+		log.Println("[OK]: Send list of solvers was successful")
 	}
 }
-
-// **************************************************

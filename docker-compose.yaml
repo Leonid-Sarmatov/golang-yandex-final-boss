@@ -12,3 +12,43 @@ services:
       - ./init.sql:/docker-entrypoint-initdb.d/init.sql
     ports:
       - "5432:5432"
+    networks:
+      - leonid_network
+
+  orchestrator-server:
+    build:
+      context: ./orchestrator_server
+      dockerfile: Dockerfile
+    container_name: orchestrator_server
+    depends_on:
+      - postgres
+    ports:
+      - "8082:8082"
+    networks:
+      - leonid_network
+
+  frontend-server:
+    build:
+      context: ./frontend_server
+      dockerfile: Dockerfile
+    container_name: frontend_server
+    depends_on:
+      - orchestrator-server
+    ports:
+      - "8081:8081"
+    networks:
+      - leonid_network
+
+  real-solver:
+    build:
+      context: ./real_solver
+      dockerfile: Dockerfile
+    container_name: real_solver
+    depends_on:
+      - frontend-server
+    networks:
+      - leonid_network
+
+networks:
+  leonid_network:
+    driver: bridge

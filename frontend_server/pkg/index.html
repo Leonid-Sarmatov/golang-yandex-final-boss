@@ -211,25 +211,23 @@
       console.log(operation.expression);
       var status = ""
       if (operation.status === 1) {
-        status = "Accepted for processing";
-      }
-      if (operation.status === 2) {
         status = "Successfully parsed and accepted for processing";
       }
-      if (operation.status === 3) {
+      if (operation.status === 2) {
         status = "In the process of calculation";
       }
-      if (operation.status === 4) {
+      if (operation.status === 3) {
         status = "Successfully calculated";
       }
-      if (operation.status === 5) {
-        status = "Unexpected error";
+      if (operation.status === 4) {
+        status = "Failed calculation, returned to unresolved list";
       }
       listItem.innerHTML = `
         <strong>Status:</strong> ${status}<br>
         <strong>Expression:</strong> ${operation.expression}<br>
-        <strong>Creation Date:</strong> ${operation.creationDate}<br>
-        <strong>Completion Date:</strong> ${operation.completionDate}<br>
+        <strong>Result:</strong> ${operation.result}<br>
+        <strong>Creation Date:</strong> ${operation.beginTime}<br>
+        <strong>Completion Date:</strong> ${operation.endTime}<br>
       `;
       operationList.appendChild(listItem);
     });  
