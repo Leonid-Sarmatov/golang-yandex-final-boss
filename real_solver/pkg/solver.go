@@ -3,14 +3,15 @@ package pkg
 import (
 	"fmt"
 	"time"
+
 	//"regexp"
+	"bytes"
+	"encoding/json"
+	"log"
+	"net/http"
 	"strconv"
 	"strings"
 	"sync"
-	"encoding/json"
-	"log"
-	"bytes"
-	"net/http"
 )
 
 var (
@@ -54,9 +55,13 @@ type SolverRequestJSON struct {
 }
 
 /*
-*/
+Solver описывает вычислитель 
+Содержит имя вычислителя, вычисляемое им в данный 
+момент выражение и строки запросов для рукопожатия, 
+получения задачи и отправки результата 
+ */
 type Solver struct {
-	HandShakeURL string
+	HandShakeURL  string
 	GetTaskURL    string
 	SendResultURL string
 	SolverName    string
@@ -64,10 +69,19 @@ type Solver struct {
 }
 
 /*
-*/
+NewMessageManager создает новый вычислитель 
+
+Parameters:
+
+	string: Имя вычислителя
+
+Returns:
+
+	*Solver: Указатель на вычислитель
+ */
 func NewSolver(name string) *Solver {
 	return &Solver{
-		HandShakeURL: "http://orchestrator_server:8082/solverHandShake",
+		HandShakeURL:  "http://orchestrator_server:8082/solverHandShake",
 		GetTaskURL:    "http://orchestrator_server:8082/getTaskToSolving",
 		SendResultURL: "http://orchestrator_server:8082/setResultOfExpression",
 		SolverName:    name,
@@ -84,11 +98,13 @@ func (s *Solver) RunHandShakeStream() {
 		SolverName: s.SolverName,
 	}
 
+	// Кодируем JSON
 	jsonRequest, err := json.Marshal(request)
 	if err != nil {
 		log.Println("[ERROR]: Can not encoding to JSON: " + err.Error())
 	}
 
+	// Запускаем горутину с регулярными рукопожатиями
 	go func(jsonRequest []byte) {
 		for {
 			select {
@@ -97,8 +113,9 @@ func (s *Solver) RunHandShakeStream() {
 				req, err := http.Post(s.HandShakeURL, "application/json", jsonBytes)
 				if err != nil {
 					log.Println("[ERROR]: Can not connect to orkestrator: " + err.Error())
+				} else {
+					log.Println("[OK]: Hand shake!" + req.Status)
 				}
-				log.Println("[OK]: Hand shake!" + req.Status)
 			}
 		}
 	}(jsonRequest)
@@ -124,8 +141,9 @@ func (s *Solver) RunSolverStream() {
 				// Пробуем отправить запрос на получение задачи
 				resp, err = http.Post(s.GetTaskURL, "application/json", bytes.NewBuffer(jsonRequest))
 				if err != nil || resp.StatusCode != http.StatusOK {
-					// Если не удалочь отправить успешный запрос,
-					// то ждем две секунды, и пытаемся отправить запрос повторно
+					// Если не удалочь отправить успешный запрос или отказано
+					// в получении задачи то ждем две секунды, 
+					// и пытаемся отправить запрос повторно
 					log.Println("[ERROR]: Can not connect to orkestrator")
 					time.Sleep(2 * time.Second)
 
@@ -151,20 +169,22 @@ func (s *Solver) RunSolverStream() {
 			timesMap = message.Times
 
 			// Парсим и вычисляем выражение
-			res, err := Solving(message.Expression)
-			if err != nil {
-				log.Println("[ERROR]: Can not solving expression: " + err.Error())
-				panic(err)
-			}
-
-			log.Println("[INFO]: Successful evaluate")
-
-			// Создаем JSON запроса
 			result := ResultFromSolver{
 				SolverName: s.SolverName,
 				Expression: message.Expression,
-				Result:     fmt.Sprintf("%v", res),
+				Result:     "",
 				Status:     0,
+			}
+
+			// Получаем результат, и проверяем канал с ошибками
+			res, err := Solving(message.Expression)
+			if err != nil {
+				result.Status = 1
+				result.Result = err.Error()
+				log.Printf("[INFO]: Can not solving expression")
+			} else {
+				result.Result = fmt.Sprintf("%v", res)
+				log.Printf("[OK]: Solving expression was successful")
 			}
 
 			// Формируем JSON
@@ -185,6 +205,7 @@ func (s *Solver) RunSolverStream() {
 				} else {
 					// Если запрос успешен и получили код 200, то выходим из цикла
 					log.Println("[OK]: Successful sending result")
+					s.Expression = "None"
 					break
 				}
 			}
@@ -195,6 +216,9 @@ func (s *Solver) RunSolverStream() {
 func Solving(expression string) (float64, error) {
 	// Создаем синхронизатор
 	wg := sync.WaitGroup{}
+
+	// Создаем канал с ошибками, при передачи ошибки, нужно прервать выполнение вычисления
+	errChan := make(chan error, 1)
 
 	// Создаем массив чисел в виде строк
 	stringArrayOfNumber := strings.FieldsFunc(expression, func(r rune) bool {
@@ -264,7 +288,11 @@ func Solving(expression string) (float64, error) {
 				wg.Add(1)
 				go func(numbers []float64, operations []string, counter int) {
 					defer wg.Done()
-					groupResultArray[counter] = FirstPriority(numbers, operations)
+					x, err := FirstPriority(numbers, operations)
+					if err != nil {
+						errChan <- err
+					}
+					groupResultArray[counter] = x
 				}(numbers, operations, counter)
 
 				// Очищаем массивы для поиска следующей группы операций первого приоритета
@@ -284,7 +312,7 @@ func Solving(expression string) (float64, error) {
 			// Если мы на конце массива с операциями, надо доподнительно записать
 			// крайнее в выражении число
 			if i == len(arrayOfOperation)-1 {
-				groupResultArray[counter+1] = arrayOfNumber[i+1]
+				groupResultArray[counter] = arrayOfNumber[i+1]
 			}
 		}
 
@@ -308,23 +336,38 @@ func Solving(expression string) (float64, error) {
 				wg.Add(1)
 				go func(numbers []float64, operations []string, counter int) {
 					defer wg.Done()
-					groupResultArray[counter] = FirstPriority(numbers, operations)
+					x, err := FirstPriority(numbers, operations)
+					if err != nil {
+						errChan <- err
+					}
+					groupResultArray[counter] = x
 				}(numbers, operations, counter)
 			}
 		}
 	}
 
+	go func() {
+		wg.Wait()
+		close(errChan)
+	}()
+
+	// Отлавливаем ошибки, возникающие в процессе вычислений
+	for i := range errChan {
+		log.Printf("Error %v", i)
+		return 0.0, i
+	}
+
 	// Ждем пока посчитаются все операции первого приоритета
 	// после чего получается массив чисел, над которыми остается
 	// совершать только сложения и вычитания, то есть операции второго приоритета
-	wg.Wait()
+	//wg.Wait()
 	return SecondPriority(groupResultArray, groupOperatinArray), nil
 }
 
 /*
 FirstPriority
 */
-func FirstPriority(arrayOfNumber []float64, arrayOfOperation []string) float64 {
+func FirstPriority(arrayOfNumber []float64, arrayOfOperation []string) (float64, error) {
 	res := arrayOfNumber[0]
 	for i := 0; i < len(arrayOfOperation); i += 1 {
 		switch arrayOfOperation[i] {
@@ -336,11 +379,11 @@ func FirstPriority(arrayOfNumber []float64, arrayOfOperation []string) float64 {
 				res /= arrayOfNumber[i+1]
 				time.Sleep(time.Duration(timesMap["/"]) * time.Second)
 			} else {
-				panic("fatal")
+				return 0.0, fmt.Errorf("Division by zero: %v / %v", res, arrayOfNumber[i+1])
 			}
 		}
 	}
-	return res
+	return res, nil
 }
 
 /*

@@ -5,6 +5,8 @@ import (
 	"log"
 	"net/http"
 	"time"
+	"strings"
+	"sort"
 	//"github.com/Knetic/govaluate"
 )
 
@@ -45,13 +47,54 @@ func (e *AddArithmeticExpression) getExecutorHandler() func(http.ResponseWriter,
 			Status:     1,
 			Result:     "",
 			BeginTime:  message.TimeToSend,
-			EndTime:    message.TimeToSend.Add(1 * time.Second),
+			EndTime:    message.TimeToSend.Add(e.findExecutionTime(message.Expression)),
 		}
 
 		e.Manager.DbConnection.AddTask(task)
 		w.WriteHeader(http.StatusOK)
 		log.Println("[OK]: Write task to database was successful")
 	}
+}
+
+func (e *AddArithmeticExpression) findExecutionTime(expression string) time.Duration {
+	// Создаем массив операций
+	arrayOfOperation := make([]string, 0)
+	for _, ch := range strings.Split(expression, "") {
+		if ch == "+" || ch == "-" || ch == "/" || ch == "*" {
+			arrayOfOperation = append(arrayOfOperation, ch)
+		}
+	}
+
+	x := make([]int, 0)
+	t1 := 0
+	t2 := 0
+	for i, val := range arrayOfOperation {
+		if val == "*" || val == "/" {
+			t1 += e.Manager.OperationTimeMap[val]
+			if i == len(arrayOfOperation)-1 {
+				x = append(x, t1)
+				t1 = 0
+			}
+
+			if i < len(arrayOfOperation)-1 && 
+				(arrayOfOperation[i+1] == "+" || arrayOfOperation[i+1] == "-"){
+				x = append(x, t1)
+				t1 = 0
+			}
+			log.Printf("Find * or /, t1 = %v", t1)
+		}
+
+		if val == "+" || val == "-" {
+			t2 += e.Manager.OperationTimeMap[val]
+			log.Printf("Find + or -, t2 = %v", t2)
+		}
+	}
+
+	sort.Slice(x, func(i, j int) bool { return i > j })
+	if len(x) != 0 {
+		t2 += x[0]
+	}
+	return time.Duration(t2) * time.Second
 }
 
 /*
@@ -190,31 +233,50 @@ func (e *GetReadyTaskToSolving) getExecutorHandler() func(http.ResponseWriter, *
 			e.Manager.Mutex.Unlock()
 		}
 
+		// Ждем пока будет доступ к базе данных
+		// как только доступ появился, блокируем остальным потокам
+		// возможность выдавать задачи вычислителям, что бы избежать
+		// вероятность выдачи одной задачи двум вычислителям
+		e.Manager.DbLockChan <- 0
+
 		// Запрашиваем у базы данных список задач,
 		// принятых, но не отданных вычистилелям (статус 1)
+		// если не удалось успешно отправить запрос, прерываем выдачу задачи,
+		// разблокируем доступ параллельным запросам на выдачу задач
 		tasks, err := e.Manager.DbConnection.GetTasksFromStatus(1)
 		if err != nil {
 			http.Error(w, "[ERROR]:GetReadyTaskToSolving Database error: "+err.Error(), http.StatusInternalServerError)
 			log.Println("[ERROR]: GetReadyTaskToSolving Database error: " + err.Error())
+			<- e.Manager.DbLockChan
 			return
 		}
 
 		// Если список пуст, значит задач нет,
-		// значит отказываем вычислителю в выдаче задачи
+		// значит отказываем вычислителю в выдаче задачи,
+		// разблокируем возможность получать задачи
 		if len(tasks) == 0 {
 			http.Error(w, "[INFO]: GetReadyTaskToSolving Receipt of task denied", http.StatusInternalServerError)
 			log.Println("[INFO]: GetReadyTaskToSolving Receipt of task denied")
+			<- e.Manager.DbLockChan
 			return
 		}
 
 		// Перем первую задачу в списке(почемы бы и нет), пробуем
 		// изменить ее статус с 1 (принята в обработку) на 2 (отдана вычислителю)
+		// при ошибке доступа к таблице (база данных упала) прерываем выдачу задачи,
+		// разблокируем доступ параллельным запросам на выдачу задач
 		err = e.Manager.DbConnection.UpdateStatusFromExpression(2, tasks[0].Expression)
 		if err != nil {
 			http.Error(w, "[ERROR]: Database error: "+err.Error(), http.StatusInternalServerError)
 			log.Println("[ERROR]: Database error: " + err.Error())
+			<- e.Manager.DbLockChan
 			return
 		}
+
+		// После того как из таблицы была успешно взята задача,
+		// и ее успешно удалось перевести в состояние 2,
+		// разблокируем доступ параллельным запросам на выдачу задач
+		<- e.Manager.DbLockChan
 
 		// Отдаем вычислителю задачу. Формируем JSON
 		tastToSend := &TaskToSendToSolver{
@@ -295,8 +357,15 @@ func (e *SetResultOfSolving) getExecutorHandler() func(http.ResponseWriter, *htt
 		// Отправляем вычислителю код 200, что бы он не пытался снова отправить ответ
 		if message.Result == "" || message.Status != 0 {
 			w.WriteHeader(http.StatusOK)
-			log.Println("[ERROR]: Result in invalid: " + err.Error())
+			log.Println("[ERROR]: Result in invalid")
 			e.Manager.DbConnection.UpdateStatusFromExpression(4, message.Expression)
+			// Записываем в словарь о том что вычислитель свободен
+			e.Manager.Mutex.Lock()
+			solver := e.Manager.SolverInfoMap[message.SolverName]
+			solver.InfoString = "Free"
+			solver.SolvingNowExpression = "None"
+			e.Manager.SolverInfoMap[message.SolverName] = solver
+			e.Manager.Mutex.Unlock()
 			return
 		}
 
@@ -311,7 +380,7 @@ func (e *SetResultOfSolving) getExecutorHandler() func(http.ResponseWriter, *htt
 			return
 		}
 
-		// Записываем в словарь о том какой вычислитель какую задачу выполняет
+		// Записываем в словарь о том что вычислитель свободен
 		e.Manager.Mutex.Lock()
 		solver := e.Manager.SolverInfoMap[message.SolverName]
 		solver.InfoString = "Free"
@@ -400,6 +469,8 @@ func (e *GetHandShake) getExecutorHandler() func(http.ResponseWriter, *http.Requ
 			log.Println("[ERROR]: GetHandShake Decoding JSON was failed: " + err.Error())
 			return
 		}
+
+		log.Printf("[MESSAGE]: Solver name: %v", message.SolverName)
 
 		// Проверяем зарегистрирован ли вычислитель в системе
 		if _, ok := e.Manager.SolverInfoMap[message.SolverName]; !ok {

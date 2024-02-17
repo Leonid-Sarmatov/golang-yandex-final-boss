@@ -220,7 +220,7 @@
         status = "Successfully calculated";
       }
       if (operation.status === 4) {
-        status = "Failed calculation, returned to unresolved list";
+        status = "Failed calculation";
       }
       listItem.innerHTML = `
         <strong>Status:</strong> ${status}<br>
@@ -281,7 +281,7 @@
       const listItem = document.createElement('li');
       console.log(solver);
       listItem.innerHTML = `
-        <strong>Solver Name:</strong> ${status.solverName}<br>
+        <strong>Solver Name:</strong> ${solver.solverName}<br>
         <strong>Solving Now Expression:</strong> ${solver.solvingExpression}<br>
         <strong>Last Ping:</strong> ${solver.lastPing}<br>
         <strong>Infomatiom From The Solver:</strong> ${solver.infoString}<br>

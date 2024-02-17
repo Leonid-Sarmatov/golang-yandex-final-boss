@@ -5,7 +5,6 @@ import (
 	"net/http"
 	"sync"
 	"time"
-	//"orchestrator_server/pkg"
 )
 
 /*
@@ -36,39 +35,49 @@ type Executor interface {
 /*
 MessageManager определяет структуру содержащю общие
 данные для исполнителей.
+
 1. Структура содежит коннект к базе данных, который могут
 все использовать для подключения к таблицам.
-2. Структура содержит словарь, со временем исполнения
+
+2. Структура содержит канал, предназначенный для блокировки 
+выдачи задачи, так как выдача задачи состоит из двух
+запросов к таблицам, и при параллельных запросах к оркестратору
+сожет возникнуть выдача одной задачи двум вычислителям и т. п.
+
+3. Структура содержит словарь, со временем исполнения
 каждой операции, для того что бы каждый раз не запрашивать из из базы.
-3. Структура содержит словарь, с информацией о зарегистрированных
+
+4. Структура содержит словарь, с информацией о зарегистрированных
 в системе вычислителях.
-4. Структура содержит кеш таблицы из базы, где зранятся все задачи,
-что бы каждый раз не делать запрос в базу данных.
+
+5. Структура содержит мутекс, для безопасного доступа к словарям
+менеджера во время параллельных запросов
 */
 type MessageManager struct {
 	DbConnection     *DatabaseConnection
+	DbLockChan       chan int
 	OperationTimeMap map[string]int
 	SolverInfoMap    map[string]*Solver
 	Mutex            sync.Mutex
 }
 
+/*
+NewMessageManager возвращает ссылку на новый менеджер сообщений
+*/
 func NewMessageManager() (*MessageManager, error) {
 	// Создаем менеджер
 	var manager MessageManager
 	manager.OperationTimeMap = make(map[string]int)
 	manager.SolverInfoMap = make(map[string]*Solver)
-
+	manager.DbLockChan = make(chan int, 1)
 
 	// Создаем коннект к базе данных
 	dbConn, err := NewDatabaseConnection("host=postgres port=5432 user=leonid password=password dbname=main_database sslmode=disable")
 	if err != nil {
 		log.Fatalln(err)
-		//log.Println(err)
 		return nil, err
-		//time.Sleep(1 * time.Second)
 	}
-	log.Println("i m here!")
-	
+	log.Printf("[INFO]: Connect to database was successful")
 
 	// Кладем ссылку на соединение в менеджер
 	manager.DbConnection = dbConn
@@ -108,12 +117,23 @@ func NewMessageManager() (*MessageManager, error) {
 			case <-ticker.C:
 				manager.Mutex.Lock()
 				for _, val := range manager.SolverInfoMap {
-					if time.Now().Sub(val.LastPing) >= 60*time.Second {
-						val.InfoString = "The server is not working"
+					// Если рукопожатие нет очень долго
+					if time.Now().Sub(val.LastPing) >= 10*time.Second {
+						val.InfoString = "Solver is died"
+						continue
 					}
 
+					// Если рукопожатие пропало
 					if time.Now().Sub(val.LastPing) >= 2*time.Second {
-						val.InfoString = "Solver is temporarily unavailable due to reboot"
+						// Пишем что сервер недоступен
+						val.InfoString = "The server is not working"
+						// Задачу которую сервер решал, переводим в статус 1 (в обработке)
+						// что бы сделает ее доступной для других вычислителей
+						err = manager.DbConnection.UpdateStatusAndResultFromExpression(
+							1, val.SolvingNowExpression, "")
+						if err != nil {
+							log.Println("[ERROR]: Database error: " + err.Error())
+						}
 					}
 				}
 				manager.Mutex.Unlock()
@@ -125,6 +145,10 @@ func NewMessageManager() (*MessageManager, error) {
 	return &manager, nil
 }
 
+/*
+SetDefaultTimesOfOperation заполняет словарь со временем выполнения
+операций настройками по умолчанию
+*/
 func (manager *MessageManager) SetDefaultTimesOfOperation() {
 	manager.OperationTimeMap["+"] = 1
 	manager.OperationTimeMap["-"] = 1
