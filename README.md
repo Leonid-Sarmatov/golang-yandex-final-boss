@@ -44,7 +44,7 @@ docker-compose up -d
 ```
 Если интересно посмотреть логи, то:
 ```
-docker-compose up -d
+docker-compose up
 ```
 Для остановки:
 ```
