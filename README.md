@@ -60,4 +60,4 @@ curl -sSL https://get.docker.com | sh
 sudo usermod -aG docker $(whoami)
 ```
 
-Для просмотра веб страуицы переидите по: (http://localhost:8081/frontendSite)
+Для просмотра веб страуицы переидите по: http://localhost:8081/frontendSite
