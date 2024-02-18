@@ -47,54 +47,14 @@ func (e *AddArithmeticExpression) getExecutorHandler() func(http.ResponseWriter,
 			Status:     1,
 			Result:     "",
 			BeginTime:  message.TimeToSend,
-			EndTime:    message.TimeToSend.Add(e.findExecutionTime(message.Expression)),
+			//EndTime:    message.TimeToSend.Add(e.findExecutionTime(message.Expression)),
+			//EndTime:    ,
 		}
 
 		e.Manager.DbConnection.AddTask(task)
 		w.WriteHeader(http.StatusOK)
 		log.Println("[OK]: Write task to database was successful")
 	}
-}
-
-func (e *AddArithmeticExpression) findExecutionTime(expression string) time.Duration {
-	// Создаем массив операций
-	arrayOfOperation := make([]string, 0)
-	for _, ch := range strings.Split(expression, "") {
-		if ch == "+" || ch == "-" || ch == "/" || ch == "*" {
-			arrayOfOperation = append(arrayOfOperation, ch)
-		}
-	}
-
-	x := make([]int, 0)
-	t1 := 0
-	t2 := 0
-	for i, val := range arrayOfOperation {
-		if val == "*" || val == "/" {
-			t1 += e.Manager.OperationTimeMap[val]
-			if i == len(arrayOfOperation)-1 {
-				x = append(x, t1)
-				t1 = 0
-			}
-
-			if i < len(arrayOfOperation)-1 && 
-				(arrayOfOperation[i+1] == "+" || arrayOfOperation[i+1] == "-"){
-				x = append(x, t1)
-				t1 = 0
-			}
-			log.Printf("Find * or /, t1 = %v", t1)
-		}
-
-		if val == "+" || val == "-" {
-			t2 += e.Manager.OperationTimeMap[val]
-			log.Printf("Find + or -, t2 = %v", t2)
-		}
-	}
-
-	sort.Slice(x, func(i, j int) bool { return i > j })
-	if len(x) != 0 {
-		t2 += x[0]
-	}
-	return time.Duration(t2) * time.Second
 }
 
 /*
@@ -265,13 +225,17 @@ func (e *GetReadyTaskToSolving) getExecutorHandler() func(http.ResponseWriter, *
 		// изменить ее статус с 1 (принята в обработку) на 2 (отдана вычислителю)
 		// при ошибке доступа к таблице (база данных упала) прерываем выдачу задачи,
 		// разблокируем доступ параллельным запросам на выдачу задач
-		err = e.Manager.DbConnection.UpdateStatusFromExpression(2, tasks[0].Expression)
+		err = e.Manager.DbConnection.UpdateStatusAndTimeFromExpression(
+			time.Now().Add(e.findExecutionTime(tasks[0].Expression)), 
+			2, 
+			tasks[0].Expression)
 		if err != nil {
 			http.Error(w, "[ERROR]: Database error: "+err.Error(), http.StatusInternalServerError)
 			log.Println("[ERROR]: Database error: " + err.Error())
 			<- e.Manager.DbLockChan
 			return
 		}
+		//EndTime:    message.TimeToSend.Add(e.findExecutionTime(message.Expression)),
 
 		// После того как из таблицы была успешно взята задача,
 		// и ее успешно удалось перевести в состояние 2,
@@ -309,6 +273,50 @@ func (e *GetReadyTaskToSolving) getExecutorHandler() func(http.ResponseWriter, *
 
 		log.Println("[OK]: Send expression to solver")
 	}
+}
+
+/*
+findExecutionTime находит время выполнения задачи по выражению
+*/
+func (e *GetReadyTaskToSolving) findExecutionTime(expression string) time.Duration {
+	// Создаем массив операций
+	arrayOfOperation := make([]string, 0)
+	for _, ch := range strings.Split(expression, "") {
+		if ch == "+" || ch == "-" || ch == "/" || ch == "*" {
+			arrayOfOperation = append(arrayOfOperation, ch)
+		}
+	}
+
+	x := make([]int, 0)
+	t1 := 0
+	t2 := 0
+	for i, val := range arrayOfOperation {
+		if val == "*" || val == "/" {
+			t1 += e.Manager.OperationTimeMap[val]
+			if i == len(arrayOfOperation)-1 {
+				x = append(x, t1)
+				t1 = 0
+			}
+
+			if i < len(arrayOfOperation)-1 && 
+				(arrayOfOperation[i+1] == "+" || arrayOfOperation[i+1] == "-"){
+				x = append(x, t1)
+				t1 = 0
+			}
+			log.Printf("Find * or /, t1 = %v", t1)
+		}
+
+		if val == "+" || val == "-" {
+			t2 += e.Manager.OperationTimeMap[val]
+			log.Printf("Find + or -, t2 = %v", t2)
+		}
+	}
+
+	sort.Slice(x, func(i, j int) bool { return i > j })
+	if len(x) != 0 {
+		t2 += x[0]
+	}
+	return time.Duration(t2) * time.Second
 }
 
 /*

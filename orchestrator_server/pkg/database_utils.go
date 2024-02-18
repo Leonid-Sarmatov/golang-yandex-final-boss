@@ -3,6 +3,8 @@ package pkg
 import (
 	"database/sql"
 	"log"
+	"time"
+
 	//"time"
 
 	_ "github.com/lib/pq"
@@ -182,6 +184,14 @@ UpdateStatusFromExpression обновляет статус у записи с о
 */
 func (db *DatabaseConnection) UpdateStatusFromExpression(status int, expression string) error {
 	_, err := db.DB.Exec("UPDATE task_table SET status = $1 WHERE expression = $2", status, expression)
+	return err
+}
+
+/*
+UpdateStatusAndTimeFromExpression обновляет статус и время окончания выполнения у задачи
+*/
+func (db *DatabaseConnection) UpdateStatusAndTimeFromExpression(timeEnd time.Time, status int, expression string) error {
+	_, err := db.DB.Exec("UPDATE task_table SET status = $1, time_end = $3 WHERE expression = $2", status, expression, timeEnd)
 	return err
 }
 

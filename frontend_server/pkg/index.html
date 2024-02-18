@@ -196,6 +196,7 @@
       if (xhr.readyState === 4 && xhr.status === 200) {
         var operations = JSON.parse(xhr.responseText);
         populateOperationList(operations);
+        console.log(operations);
       }
     };
 
@@ -222,12 +223,18 @@
       if (operation.status === 4) {
         status = "Failed calculation";
       }
+      var endTime = ""
+      if (operation.endTime === "0001-01-01T00:00:00Z") {
+        endTime = "undefined"
+      } else {
+        endTime = operation.endTime
+      }
       listItem.innerHTML = `
         <strong>Status:</strong> ${status}<br>
         <strong>Expression:</strong> ${operation.expression}<br>
         <strong>Result:</strong> ${operation.result}<br>
         <strong>Creation Date:</strong> ${operation.beginTime}<br>
-        <strong>Completion Date:</strong> ${operation.endTime}<br>
+        <strong>Completion Date:</strong> ${endTime}<br>
       `;
       operationList.appendChild(listItem);
     });  
